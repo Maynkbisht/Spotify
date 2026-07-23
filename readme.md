@@ -2,6 +2,8 @@
 
 A browser-based music player built with vanilla HTML, CSS, and JavaScript — no frameworks, no build step. Browse albums, play songs, and control playback just like the real thing.
 
+Live Demo - https://codeheavespotifyclone.onrender.com/
+
 ## Features
 
 - **Album browsing** — a grid of album cards pulled dynamically from a `songs/` directory, each showing its cover art, title, and artist.
