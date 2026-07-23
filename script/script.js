@@ -45,9 +45,7 @@ function getEmbeddedCoverArt(folder, song, signal) {
           for (let i = 0; i < picture.data.length; i++) {
             base64String += String.fromCharCode(picture.data[i]);
           }
-          resolve(
-            `data:${picture.format};base64,${window.btoa(base64String)}`,
-          );
+          resolve(`data:${picture.format};base64,${window.btoa(base64String)}`);
         },
         onError: (error) => {
           console.log(`Could not read tags for ${song}`, error);
@@ -85,36 +83,19 @@ async function getSongs(folder) {
   if (activeArtController) activeArtController.abort();
   const artController = new AbortController();
   activeArtController = artController;
+  let albumInfo = { artist: "Unknown Artist", songs: [] };
 
-  let directory = await fetch(`/${folder}/`);
-
-  let response = await directory.text();
-  let div = document.createElement("div");
-
-  div.innerHTML = response;
-  let as = div.getElementsByTagName("a");
-  songs = [];
-  for (let index = 0; index < as.length; index++) {
-    const element = as[index];
-    if (element.href.endsWith(".mp3")) {
-      songs.push(decodeURIComponent(element.href.split("/").pop()));
-    }
-  }
-
-  // bail out if a newer album switch happened while we were fetching —
-  // no point rendering a list the user has already moved on from
-  if (loadId !== activeLoadId) return songs;
-
-  // fetch this album's info.json so we can show the correct artist name
-  let albumInfo = { artist: "Unknown Artist" };
   try {
     let infoResponse = await fetch(`/${folder}/info.json`);
+
     if (infoResponse.ok) {
       albumInfo = await infoResponse.json();
     }
   } catch (err) {
     console.log(`Could not load info.json for ${folder}`);
   }
+
+  songs = albumInfo.songs || [];
   currentArtist = albumInfo.artist || "Unknown Artist";
 
   // bail out again — this fetch was also racing against a possible
@@ -241,89 +222,33 @@ function toggleMute(volumeImg) {
 }
 
 async function displayAlbums() {
-  // Fetch the songs directory
-  let directory = await fetch("/songs/");
-  let response = await directory.text();
+  const response = await fetch("/songs/albums.json");
+  const albums = await response.json();
 
-  let div = document.createElement("div");
-  div.innerHTML = response;
-
-  let anchors = div.getElementsByTagName("a");
-  let cardContainer = document.querySelector(".cardContainer");
-
-  // Clear existing cards
+  const cardContainer = document.querySelector(".cardContainer");
   cardContainer.innerHTML = "";
 
-  let array = Array.from(anchors);
-
-  // pull out just the valid album folder names first (skip the parent
-  // /songs/ link and .htaccess), so we know exactly what to fetch
-  let folders = array
-    .filter(
-      (e) =>
-        e.href.includes("/songs/") &&
-        !e.href.endsWith("/songs/") &&
-        !e.href.includes(".htaccess"),
-    )
-    .map((e) => e.href.split("/").slice(-2)[0]);
-
-  // fetch every album's info.json IN PARALLEL instead of one at a time.
-  // The old code had `await` inside a for loop, so album 2 didn't even
-  // start fetching until album 1 finished — with ~10 albums that adds up
-  // fast. Promise.all fires them all at once; total time becomes roughly
-  // the slowest single request instead of the sum of all of them.
-  let albumInfos = await Promise.all(
-    folders.map(async (folder) => {
-      try {
-        let info = await fetch(`/songs/${folder}/info.json`);
-        if (!info.ok) {
-          console.log(`info.json not found for ${folder}`);
-          return null;
-        }
-        let data = await info.json();
-        return { folder, data };
-      } catch (err) {
-        console.error(`Error loading ${folder}:`, err);
-        return null;
-      }
-    }),
-  );
-
-  // Build the cards now that all the data has arrived (order preserved,
-  // since Promise.all resolves in the same order the promises were created)
-  albumInfos.forEach((album) => {
-    if (!album) return;
-    const { folder, data } = album;
-
+  albums.forEach((album) => {
     cardContainer.innerHTML += `
-          <div data-folder="${folder}" class="card">
-          <div class="imgContainer">
-            <div class="play">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width: 100%;
-                height: 100%;
-                viewBox="0 0 64 64"
-              >
-                <circle cx="32" cy="32" r="30" fill="#1ED760"/>
-                <polygon points="26,20 26,44 46,32" fill="#000000"/>
-              </svg>
-            </div>
-
-            <img
-              src="/songs/${folder}/cover.png"
-              alt="${data.title}"
-            />
-             </div>
-
-            <h3>${data.title}</h3>
-            <p>${data.artist}</p>
+      <div data-folder="${album.folder}" class="card">
+        <div class="imgContainer">
+          <div class="play">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+              <circle cx="32" cy="32" r="30" fill="#1ED760"/>
+              <polygon points="26,20 26,44 46,32" fill="#000000"/>
+            </svg>
           </div>
-        `;
+
+          <img src="/songs/${album.folder}/cover.png" alt="${album.title}" />
+        </div>
+
+        <h3>${album.title}</h3>
+        <p>${album.artist}</p>
+      </div>
+    `;
   });
 
-  // Add click listeners after all cards are created
-  Array.from(document.querySelectorAll(".card")).forEach((card) => {
+  document.querySelectorAll(".card").forEach((card) => {
     card.addEventListener("click", async () => {
       songs = await getSongs(`songs/${card.dataset.folder}`);
       playMusic(songs[0]);
@@ -341,7 +266,9 @@ async function main() {
   await songsPromise;
 
   //default music
-  playMusic(songs[7], true);
+  if (songs.length > 0) {
+    playMusic(songs[0], true);
+  }
 
   // attach an eventlistner to play pause next
   play.addEventListener("click", () => {
@@ -422,7 +349,7 @@ async function main() {
   // keyboard shortcuts — Tab or Space toggles play/pause, M toggles
   // mute. preventDefault stops Tab from shifting keyboard focus and Space
   // from scrolling the page, since both are repurposed as playback controls.
-  
+
   document.addEventListener("keydown", (e) => {
     if (e.key === "Tab" || e.key === " " || e.code === "Space") {
       e.preventDefault();

@@ -1,5 +1,18 @@
 {
   "title": "Justice",
-  "description": "molding genres to fit a musical character all his own that's charming, personable, and popular on a global scale",
-  "artist": "Justin Bieber"
+  "description": "Justin Bieber's sixth studio album featuring modern pop and R&B.",
+  "artist": "Justin Bieber",
+  "songs": [
+    "2 Much.mp3",
+    "Anyone.mp3",
+    "As I Am.mp3",
+    "Deserve You.mp3",
+    "Ghost.mp3",
+    "Hold On.mp3",
+    "Loved By You.mp3",
+    "Off My Face.mp3",
+    "Peaches.mp3",
+    "Somebody.mp3",
+    "Unstable.mp3"
+  ]
 }

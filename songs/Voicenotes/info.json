@@ -1,5 +1,12 @@
 {
   "title": "Voicenotes",
-  "description": "one of the industry's most consistent hitmakers and sought-after collaborators",
-  "artist": "Charlie Puth"
+  "description": "Charlie Puth's Grammy-nominated pop album blending funk and R&B.",
+  "artist": "Charlie Puth",
+  "songs": [
+    "Attention.mp3",
+    "Empty Cups.mp3",
+    "LA Girls.mp3",
+    "Patient.mp3",
+    "The Way I Am.mp3"
+  ]
 }

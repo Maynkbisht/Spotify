@@ -1,5 +1,12 @@
 {
   "title": "CHARLIE",
-  "description": "molding genres to fit a musical character all his own that's charming, personable, and popular on a global scale",
-  "artist": "Charlie Puth"
+  "description": "Holding genres to fit a musical character all his own that's charming, personable, and popular on a global scale.",
+  "artist": "Charlie Puth",
+  "songs": [
+    "Charlie Be Quiet!.mp3",
+    "Left and Right (Feat. Jung Kook of BTS).mp3",
+    "Light Switch.mp3",
+    "Loser.mp3",
+    "That's Hilarious.mp3"
+  ]
 }

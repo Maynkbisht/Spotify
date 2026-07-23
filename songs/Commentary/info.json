@@ -1,5 +1,13 @@
 {
   "title": "Commentary",
-  "description": "molding genres to fit a musical character all his own that's charming, personable, and popular on a global scale",
-  "artist": "Alec Benjamin"
+  "description": "Alec Benjamin's emotional EP featuring introspective storytelling, acoustic melodies, and heartfelt lyrics.",
+  "artist": "Alec Benjamin",
+  "songs": [
+    "Deniro.mp3",
+    "Devil Doesn't Bargain.mp3",
+    "Dopamine Addict.mp3",
+    "Hammers.mp3",
+    "Nuance.mp3",
+    "Older.mp3"
+  ]
 }

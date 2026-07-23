@@ -1,5 +1,15 @@
 {
   "title": "X",
-  "description": "molding genres to fit a musical character all his own that's charming, personable, and popular on a global scale",
-  "artist": "Ed Sheeran"
+  "description": "Ed Sheeran's multiplatinum album featuring acoustic pop and heartfelt songwriting.",
+  "artist": "Ed Sheeran",
+  "songs": [
+    "Bloodstream.mp3",
+    "I'm a Mess.mp3",
+    "Make It Rain.mp3",
+    "Nina.mp3",
+    "Photograph.mp3",
+    "Sing.mp3",
+    "Tenerife Sea.mp3",
+    "Thinking Out Loud.mp3"
+  ]
 }

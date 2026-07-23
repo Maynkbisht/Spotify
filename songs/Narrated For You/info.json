@@ -1,5 +1,13 @@
 {
   "title": "Narrated For You",
-  "description": "molding genres to fit a musical character all his own that's charming, personable, and popular on a global scale",
-  "artist": "Alec Benjamin"
+  "description": "The debut mixtape by Alec Benjamin filled with emotional stories and acoustic melodies.",
+  "artist": "Alec Benjamin",
+  "songs": [
+    "Annabelle's Homework.mp3",
+    "Boy In The Bubble.mp3",
+    "Let Me Down Slowly.mp3",
+    "Steve.mp3",
+    "Swim.mp3",
+    "Water Fountain.mp3"
+  ]
 }

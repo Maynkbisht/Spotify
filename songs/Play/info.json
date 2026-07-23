@@ -1,5 +1,12 @@
 {
   "title": "Play",
-  "description": "molding genres to fit a musical character all his own that's charming, personable, and popular on a global scale",
-  "artist": "Ed Sheeran"
+  "description": "A collection of Ed Sheeran's chart-topping pop songs.",
+  "artist": "Ed Sheeran",
+  "songs": [
+    "Azizam.mp3",
+    "Fade Out.mp3",
+    "Lights Out.mp3",
+    "Old Phone.mp3",
+    "Regrets.mp3"
+  ]
 }

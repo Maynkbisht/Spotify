@@ -1,5 +1,13 @@
 {
   "title": "Purpose",
-  "description": "Amazing Hip Hop Songs",
-  "artist": "Justin Beiber"
+  "description": "Justin Bieber's iconic album featuring worldwide hit singles.",
+  "artist": "Justin Bieber",
+  "songs": [
+    "Love Yourself.mp3",
+    "No Pressure.mp3",
+    "No Sense.mp3",
+    "Purpose.mp3",
+    "Sorry.mp3",
+    "Where Are Ü Now.mp3"
+  ]
 }
