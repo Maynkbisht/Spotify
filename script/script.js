@@ -15,29 +15,59 @@ function secondsToMinutesSeconds(seconds) {
   return `${formattedMinutes}:${formattedSeconds}`;
 }
 
+// ---------------------------------------------------------------------
+// Caches
+// ---------------------------------------------------------------------
+// Avoids re-fetching info.json every time an already-visited album is
+// clicked again.
+const albumInfoCache = new Map(); // folder -> { artist, songs }
+
+// Avoids re-downloading and re-parsing a song's embedded art every time
+// its album is revisited. Value is the resolved art data-URI, or null if
+// the song has no embedded art (so we don't keep retrying it either).
+const coverArtCache = new Map(); // "folder/song" -> artUrl | null
+
 // reads a song's own embedded ID3 cover art (not the album's cover.png).
 // Resolves to a base64 data URI if the mp3 has embedded art, or null if it
 // doesn't (or jsmediatags isn't available), so callers can fall back cleanly.
+//
 // IMPORTANT: we fetch the file as a Blob ourselves and hand that to
 // jsmediatags, instead of letting it fetch the URL directly. jsmediatags'
 // URL reader relies on HTTP Range requests, which many local dev servers
 // (e.g. VS Code Live Server) don't support — causing every read to fail
 // silently and always fall back to the album cover.
-
+//
+// We also ask for only the first 512KB of the file via a Range header.
+// ID3v2 tags (including embedded art) live at the start of the file, so
+// there's normally no need to download the whole track — often several
+// MB — just to read a few KB of metadata. This is the single biggest
+// win for perceived load speed: it stops metadata reads from competing
+// with the actual audio stream for bandwidth and connections. If the
+// server ignores Range and returns the full file, this still works
+// correctly, just without the savings.
 function getEmbeddedCoverArt(folder, song, signal) {
+  const cacheKey = `${folder}/${song}`;
+  if (coverArtCache.has(cacheKey)) {
+    return Promise.resolve(coverArtCache.get(cacheKey));
+  }
+
   return new Promise(async (resolve) => {
     if (typeof window.jsmediatags === "undefined") {
       resolve(null);
       return;
     }
     try {
-      let fileResponse = await fetch(`/${folder}/${song}`, { signal });
+      let fileResponse = await fetch(`/${folder}/${song}`, {
+        signal,
+        headers: { Range: "bytes=0-524287" },
+      });
       let fileBlob = await fileResponse.blob();
 
       window.jsmediatags.read(fileBlob, {
         onSuccess: (tag) => {
           let picture = tag.tags.picture;
           if (!picture) {
+            coverArtCache.set(cacheKey, null);
             resolve(null);
             return;
           }
@@ -45,16 +75,20 @@ function getEmbeddedCoverArt(folder, song, signal) {
           for (let i = 0; i < picture.data.length; i++) {
             base64String += String.fromCharCode(picture.data[i]);
           }
-          resolve(`data:${picture.format};base64,${window.btoa(base64String)}`);
+          let artUrl = `data:${picture.format};base64,${window.btoa(base64String)}`;
+          coverArtCache.set(cacheKey, artUrl);
+          resolve(artUrl);
         },
         onError: (error) => {
           console.log(`Could not read tags for ${song}`, error);
+          coverArtCache.set(cacheKey, null);
           resolve(null);
         },
       });
     } catch (err) {
       // AbortError is expected when the user switches albums quickly —
-      // not a real failure, so don't clutter the console with it
+      // not a real failure, so don't clutter the console, and don't
+      // cache it either since we never actually got an answer.
       if (err.name !== "AbortError") {
         console.log(`Could not fetch ${song} for tag reading`, err);
       }
@@ -73,6 +107,35 @@ function getEmbeddedCoverArt(folder, song, signal) {
 let activeLoadId = 0;
 let activeArtController = null;
 
+// Fetches embedded art for a batch of songs with only a small number of
+// requests in flight at once (instead of firing every song's fetch
+// simultaneously). This keeps the album's own cover-art work from
+// starving the actual audio playback request and other page traffic of
+// connections, which is what was causing the sluggish, stuttery
+// switching between albums/songs.
+async function loadEmbeddedArtForAlbum(folder, songList, loadId, signal, songUL) {
+  const CONCURRENCY = 2;
+  let index = 0;
+
+  async function worker() {
+    while (index < songList.length) {
+      if (loadId !== activeLoadId) return;
+      const song = songList[index++];
+      let artUrl = await getEmbeddedCoverArt(folder, song, signal);
+      if (loadId !== activeLoadId || !artUrl) continue;
+      let li = Array.from(songUL.getElementsByTagName("li")).find(
+        (item) => item.dataset.song === song,
+      );
+      if (li) {
+        let img = li.querySelector(".songCover");
+        if (img) img.src = artUrl;
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+}
+
 async function getSongs(folder) {
   currFolder = folder;
   const loadId = ++activeLoadId;
@@ -85,14 +148,18 @@ async function getSongs(folder) {
   activeArtController = artController;
   let albumInfo = { artist: "Unknown Artist", songs: [] };
 
-  try {
-    let infoResponse = await fetch(`/${folder}/info.json`);
-
-    if (infoResponse.ok) {
-      albumInfo = await infoResponse.json();
+  if (albumInfoCache.has(folder)) {
+    albumInfo = albumInfoCache.get(folder);
+  } else {
+    try {
+      let infoResponse = await fetch(`/${folder}/info.json`);
+      if (infoResponse.ok) {
+        albumInfo = await infoResponse.json();
+        albumInfoCache.set(folder, albumInfo);
+      }
+    } catch (err) {
+      console.log(`Could not load info.json for ${folder}`);
     }
-  } catch (err) {
-    console.log(`Could not load info.json for ${folder}`);
   }
 
   songs = albumInfo.songs || [];
@@ -113,9 +180,13 @@ async function getSongs(folder) {
   songUL.innerHTML = "";
 
   for (const song of songs) {
+    // If we already know this song's embedded art from a previous visit,
+    // show it immediately instead of the album cover + a flash later.
+    const cachedArt = coverArtCache.get(`${folder}/${song}`);
+    const initialCover = cachedArt || coverPath;
     songUL.innerHTML += `
 <li data-song="${song}">
-    <img class="songCover" src="${coverPath}" alt="cover" />
+    <img class="songCover" src="${initialCover}" alt="cover" />
     <div class="info">
         <div>${decodeURIComponent(song).replace(".mp3", "")}</div>
         <div>${currentArtist}</div>
@@ -138,38 +209,59 @@ async function getSongs(folder) {
 
   // swap each song's icon to its own embedded cover art as it loads,
   // without blocking the initial render of the list (falls back to the
-  // album cover already shown if a song has no embedded art). Each fetch
-  // carries the AbortSignal for this album load, and every step re-checks
-  // loadId, so a rapid album switch cleanly cancels this work instead of
-  // letting it trickle in and overwrite the newer album's list.
-  songs.forEach(async (song) => {
-    let artUrl = await getEmbeddedCoverArt(folder, song, artController.signal);
-    if (loadId !== activeLoadId || !artUrl) return;
-    let li = Array.from(songUL.getElementsByTagName("li")).find(
-      (item) => item.dataset.song === song,
-    );
-    if (li) {
-      let img = li.querySelector(".songCover");
-      if (img) img.src = artUrl;
-    }
-  });
+  // album cover already shown if a song has no embedded art). Only songs
+  // not already in the cache need a network request; fetches for those
+  // are limited to a couple in flight at once (see
+  // loadEmbeddedArtForAlbum) so they don't starve playback of bandwidth.
+  // Every step re-checks loadId, so a rapid album switch cleanly cancels
+  // this work instead of letting it trickle in and overwrite the newer
+  // album's list.
+  const uncached = songs.filter((song) => !coverArtCache.has(`${folder}/${song}`));
+  if (uncached.length > 0) {
+    loadEmbeddedArtForAlbum(folder, uncached, loadId, artController.signal, songUL);
+  }
 
   return songs;
 }
 
-const playMusic = (track, pause = false) => {
-  currentSong.src = `/${currFolder}/${track}`;
+// Guards against rapid clicks racing each other: if the user clicks two
+// songs in quick succession, only the *latest* click should ever end up
+// updating the UI or holding onto the play() promise.
+let playLoadId = 0;
 
-  if (!pause) {
-    currentSong.play();
-    play.src = "./img/pause.svg";
-  }
+const playMusic = (track, pause = false) => {
+  if (!track) return; // guards against being called with a stale/empty track
+
+  const thisPlayId = ++playLoadId;
+  currentSong.src = `/${currFolder}/${track}`;
 
   document.querySelector(".songInfo").innerHTML = decodeURI(track).replace(
     ".mp3",
     "",
   );
   document.querySelector(".songTime").innerHTML = "00:00 / 00:00";
+
+  if (!pause) {
+    const playPromise = currentSong.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          if (thisPlayId === playLoadId) {
+            play.src = "./img/pause.svg";
+          }
+        })
+        .catch((err) => {
+          // Expected and harmless: happens whenever a newer track starts
+          // loading before this play() resolved. Anything else is worth
+          // knowing about.
+          if (err.name !== "AbortError") {
+            console.log("Playback failed", err);
+          }
+        });
+    } else {
+      play.src = "./img/pause.svg";
+    }
+  }
 };
 
 // keeps every sidebar song icon in sync with what's actually playing.
@@ -194,6 +286,7 @@ function updateSongIcons() {
 // reusable next-song logic (used by both the next button and the
 // "ended" event so the album auto-advances when a track finishes)
 function playNextSong() {
+  if (!songs || songs.length === 0) return;
   let currentTrack = decodeURIComponent(currentSong.src.split("/").pop());
   let index = songs.indexOf(currentTrack);
   if (index === songs.length - 1) {
@@ -208,7 +301,9 @@ function playNextSong() {
 // listeners on currentSong (see main()), so this only needs to flip state.
 function togglePlayPause() {
   if (currentSong.paused) {
-    currentSong.play();
+    currentSong.play().catch((err) => {
+      if (err.name !== "AbortError") console.log("Playback failed", err);
+    });
   } else {
     currentSong.pause();
   }
@@ -221,9 +316,14 @@ function toggleMute(volumeImg) {
   volumeImg.src = currentSong.muted ? "./img/mute.svg" : "./img/volume.svg";
 }
 
+let albumsCache = null;
+
 async function displayAlbums() {
-  const response = await fetch("/songs/albums.json");
-  const albums = await response.json();
+  if (!albumsCache) {
+    const response = await fetch("/songs/albums.json");
+    albumsCache = await response.json();
+  }
+  const albums = albumsCache;
 
   const cardContainer = document.querySelector(".cardContainer");
   cardContainer.innerHTML = "";
@@ -319,6 +419,7 @@ async function main() {
 
   //add an event listner for previous
   previous.addEventListener("click", () => {
+    if (!songs || songs.length === 0) return;
     let currentTrack = decodeURIComponent(currentSong.src.split("/").pop());
     let index = songs.indexOf(currentTrack);
     if (index <= 0) {
