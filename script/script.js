@@ -80,7 +80,15 @@ function getEmbeddedCoverArt(folder, song, signal) {
           resolve(artUrl);
         },
         onError: (error) => {
-          console.log(`Could not read tags for ${song}`, error);
+          // "No suitable tag reader found" just means this file has no
+          // ID3v2 tag at the front (e.g. it only has a trailing ID3v1
+          // tag, which can't hold artwork anyway, or no tag at all).
+          // That's a normal, expected outcome for a lot of tracks, not a
+          // real failure — so it's not worth logging. Anything else is
+          // unexpected and still worth knowing about.
+          if (error?.info !== "No suitable tag reader found") {
+            console.log(`Could not read tags for ${song}`, error);
+          }
           coverArtCache.set(cacheKey, null);
           resolve(null);
         },
